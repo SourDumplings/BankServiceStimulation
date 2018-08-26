@@ -44,23 +44,42 @@ void Stimulation::_read_bank_info()
 	printf("How many customers will come to the bank today? ");
 	read_integer(_customerNum, 0);
 
-	printf("Do you allow VIP service?(y/n): ");
-	_VIP = read_order();
-	if (_VIP)
+	int caseNo;
+	printf("Please choose the case of the simulation:\n");
+	printf("***********************************************************\n");
+	printf("	case 0 : no special case\n");
+	printf("	case 1 : the bank has VIP service\n");
+	printf("	case 2 : the bank has yellow line\n");
+	printf("	case 3 : \"friends cut in\" exists\n");
+	printf("***********************************************************\n");
+	printf("I choose case ");
+	read_integer(caseNo, 0, 3);
+	switch (caseNo)
+	{
+	case 0 :
+	{
+		_VIP = _yellowLine = _cutIn = false;
+		break;
+	}
+	case 1 :
 	{
 		printf("How many VIP windows in this bank today? ");
-		read_integer(_VIPWindowNum, 0, _windowNum-1);
+		read_integer(_VIPWindowNum, 0, _windowNum - 1);
+		_VIP = true;
+		break;
 	}
-
-	printf("Do you allow familiar cutting in?(y/n): ");
-	_cutIn = read_order();
-
-	printf("Does each window has its own queue(yellow line)?(y/n): ");
-	_yellowLine = read_order();
-	if (_yellowLine)
+	case 2 :
 	{
 		printf("How many customers can each queue inside yellow line have? ");
-		read_integer(_yellowLineCapacity, 0);
+		read_integer(_yellowLineCapacity, 1);
+		_yellowLine = true;
+		break;
+	}
+	case 3 :
+	{
+		_cutIn = true;
+		break;
+	}
 	}
 
 	printf("What is the maximum serving time for each customer(in minutes)?(0 means no limit): ");
@@ -68,33 +87,6 @@ void Stimulation::_read_bank_info()
 	read_integer(maxServeTimeM, 0, (_closeTime - _openTime + 30) / 60);
 	_maxServeTime = maxServeTimeM * 60;
 	return;
-}
-
-bool read_order()
-{
-	char order;
-	bool ret = false;
-	while (true)
-	{
-		cin >> order;
-		if (order == 'y' || order == 'Y')
-		{
-			ret = true;
-			break;
-		}
-		else if (order == 'n' || order == 'N')
-		{
-			ret = false;
-			break;
-		}
-		else
-		{
-			printf("Invalid order!\n");
-			printf("Please input order again(y/n): ");
-		}
-	}
-	
-	return ret;
 }
 
 void read_integer(int &res, int minValue, int maxValue)
@@ -139,6 +131,7 @@ void Stimulation::_read_customers_info()
 	printf("if VIP is allowed, 0 represent not VIP). They are separated by one space\n");
 	printf("For example: Tom 08:20:00 60\n");
 	printf("***********************************************************\n");
+	_customerData.resize(_customerNum);
 	for (int i = 0; i != _customerNum; ++i)
 	{
 		string name, arriveTimeS;
@@ -148,40 +141,21 @@ void Stimulation::_read_customers_info()
 		{
 			int v;
 			read_integer(v, 0, 1);
-			_customerData[name] = Customer(name, arriveTimeS, needTimeM * 60, v == 1);
-			if (v == 1)
-			{
-				_VIPQ.push_back(name);
-			}
+			_customerData[i] = Customer(name, arriveTimeS, needTimeM * 60, v == 1);
 		}
 		else
 		{
-			_customerData[name] = Customer(name, arriveTimeS, needTimeM * 60);
+			_customerData[i] = Customer(name, arriveTimeS, needTimeM * 60);
 		}
-
-		if (_yellowLine)
-		{
-			if (i < _windowNum)
-			{
-				_windowData[i]._specialQ.push_back(name);
-			}
-			else if (i < _windowNum * _yellowLineCapacity)
-			{
-				_windowData[i % _windowNum]._specialQ.push_back(name);
-			}
-			else
-				_Q.push_back(name);
-		}
-		else
-			_Q.push_back(name);
 	}
+
 	if (_cutIn)
 	{
 		printf("Now input each customer's friends' names.\n");
 		string friendName;
-		for (auto &cp : _customerData)
+		for (auto &c : _customerData)
 		{
-			printf("Input names of %s's friends(space separated, 0 means end).\n", cp.first.c_str());
+			printf("Input names of %s's friends(space separated, 0 means end).\n", c._name.c_str());
 			while (true)
 			{
 				cin >> friendName;
@@ -189,7 +163,7 @@ void Stimulation::_read_customers_info()
 				{
 					break;;
 				}
-				cp.second._friends.insert(friendName);
+				c._friends.insert(friendName);
 			}
 		}
 	}
@@ -222,7 +196,7 @@ void Stimulation::_read_windows_info()
 
 int Stimulation::_get_avail_window()
 {
-	int minRes = INT_MAX, availW = -1;
+	int minRes = INT_MAX, availW = 0;
 	for (int i = 0; i != _windowNum; ++i)
 	{
 		if (_windowData[i]._resTime < minRes)
@@ -231,7 +205,6 @@ int Stimulation::_get_avail_window()
 			minRes = _windowData[i]._resTime;
 		}
 	}
-
 	_nowTime += minRes;
 	for (auto &w : _windowData)
 	{
@@ -258,7 +231,7 @@ bool Stimulation::_has_VIP_in_Q()
 	bool ret = false;
 	if (_VIP)
 	{
-		while (_customerData[_VIPQ.front()]._served)
+		while (!_VIPQ.empty() && _customerData[_VIPQ.front()]._served)
 		{
 			_VIPQ.pop_front();
 		}
@@ -271,25 +244,251 @@ bool Stimulation::_has_VIP_in_Q()
 	return ret;
 }
 
+void Stimulation::_exec_VIP()
+{
+
+}
+
+void Stimulation::_exec_yellowLine()
+{
+
+}
+
+void Stimulation::_exec_cutIn()
+{
+
+}
+
+void Stimulation::_cut_in(int newCustomerNo)
+{
+	bool cutInSuccess = false;
+	for (auto it = _Q.begin(); it != _Q.end(); ++it)
+	{
+		const string &newCustomerName = _customerData[newCustomerNo]._name, &friendName = _customerData[*it]._name;
+		if (_customerData[newCustomerNo]._friends.find(friendName) != _customerData[newCustomerNo]._friends.end() &&
+			_customerData[*it]._friends.find(newCustomerName) != _customerData[*it]._friends.end())
+		{
+			_Q.insert(it + 1, newCustomerNo);
+			cutInSuccess = true;
+			break;
+		}
+	}
+	if (!cutInSuccess)
+	{
+		_Q.push_back(newCustomerNo);
+	}
+	return;
+}
+
+void Stimulation::_pre_treatment()
+{
+	_nowTime = _openTime;
+
+	sort(_customerData.begin(), _customerData.end(), [] (const Customer &c1, const Customer &c2)
+	{ return c1._arriveTime < c2._arriveTime; });
+
+	int yellowC = _windowNum * _yellowLineCapacity;
+	
+	for (int i = 0; i != _customerNum; ++i)
+	{
+		if (_yellowLine)
+		{
+			if (i < _windowNum)
+			{
+				_windowData[i]._specialQ.push_back(i);
+			}
+			else if (i < yellowC)
+			{
+				_windowData[i % _windowNum]._specialQ.push_back(i);
+			}
+			else
+			{
+				_Q.push_back(i);
+			}
+		}
+		else if (_cutIn)
+		{
+			_cut_in(i);
+		}
+		else
+		{
+			_Q.push_back(i);
+			if (_VIP && _customerData[i]._isVIP)
+			{
+				_VIPQ.push_back(i);
+			}
+		}
+	}
+	return;
+}
+
+
+void Stimulation::_serving_info_of_customers()
+{
+	printf("For all %d customers:\n", _customerNum);
+	printf("***********************************************************\n");
+	printf("The sequence of customers' serving information is as follow:");
+	printf("Customer's name, arriving time, serving time, waiting minutes\n");
+	printf("and VIP tag(if VIP service exists) are in a line\n");
+	printf("For example: Bob 08:00:05 08:10:00 10 VIP");
+	printf("If a customer is not served, his serving time and waiting minutes will be -");
+	printf("***********************************************************\n");
+	
+	double totalWaitTime = 0;
+	int servedNum = 0;
+
+	for (auto &c : _customerData)
+	{
+		cout << c._name << "	" << seconds_to_time(c._arriveTime) << "	";
+		if (c._served)
+		{
+			cout << seconds_to_time(c._serveTime) << "	" << (c._serveTime - c._arriveTime + 30) / 60;
+			totalWaitTime += c._serveTime - c._arriveTime;
+			++servedNum;
+		}
+		else
+			cout << "   -" << "   -";
+
+		if (_VIP)
+		{
+			cout << "	" << (c._isVIP ? "VIP" : "not VIP") << endl;
+		}
+		else
+		{
+			cout << endl;
+		}
+	}
+	printf("The average waiting time is %.2f\n", totalWaitTime / (60 * servedNum));
+	return;
+}
+
+void Stimulation::_serving_info_of_windows()
+{
+	printf("For all %d windows:\n", _windowNum);
+	printf("***********************************************************\n");
+	printf("The sequence of windows' serving information is as follow:");
+	printf("Window's number, VIP tag(if VIP service exists), served number, served sequence\n");
+	printf("For example: 0 VIP 3 Bob Jim Alice");
+	printf("If a windows served no one, its serving sequence will be -");
+	printf("***********************************************************\n");
+
+	for (int i = 0; i != _windowNum; ++i)
+	{
+		cout << i << "	";
+		if (_VIP)
+		{
+			cout << (_windowData[i]._isVIPWindow ? "VIP" : "ordinary") << "	";
+		}
+		cout << _windowData[i]._servedNum << "	";
+
+		if (_windowData[i]._servedNum == 0)
+		{
+			cout << "-" << endl;
+		}
+		else
+		{
+			int output = 0;
+			for (int cNo : _windowData[i]._servedSeq)
+			{
+				if (output++)
+				{
+					cout << " ";
+				}
+				cout << _customerData[cNo]._name;
+			}
+			cout << endl;
+		}
+	}
+	return;
+}
+
+void Stimulation::_show_results()
+{
+	printf("Stimulation successes!\n");
+	while (true)
+	{
+		printf("Which kind of results you want to see?\n");
+		printf("***********************************************************\n");
+		printf("	0: exit\n");
+		printf("	1: serving sequence of customers\n");
+		printf("	2: serving information of each window\n");
+		printf("***********************************************************\n");
+		printf("I choose ");
+		int order;
+		read_integer(order, 0, 2);
+		switch (order)
+		{
+		case 0 : break;
+		case 1 : _serving_info_of_customers(); break;
+		case 2 : _serving_info_of_windows(); break;
+		}
+		if (order == 0)
+		{
+			printf("Simulation Ends\n");
+			break;
+		}
+	}
+	return;
+}
+
 void Stimulation::exec()
 {
 	printf("Stimulation begins.\n");
-	_/*nowTime = 0;
+	_pre_treatment();
 
-	while (true)
+	if (_VIP)
 	{
-		int availW = _get_avail_window();
-		if (_VIP)
+		_exec_VIP();
+	}
+	else if (_yellowLine)
+	{
+		_exec_yellowLine();
+	}
+	else if (_cutIn)
+	{
+		_exec_cutIn();
+	}
+	else
+	{
+		while (!_Q.empty())
 		{
-			while (_customerData[_Q.front()]._served)
+			int availW = _get_avail_window();
+			int nextC = _Q.front();
+			_Q.pop_front();
+			if (_closeTime < _customerData[nextC]._arriveTime)
 			{
-				_Q.pop_front();
+				break;
 			}
+			if (_nowTime < _customerData[nextC]._arriveTime)
+			{
+				for (int i = 0; i != _windowNum; ++i)
+				{
+					_windowData[i]._resTime -= _customerData[nextC]._arriveTime - _nowTime;
+					if (_windowData[i]._resTime < 0)
+					{
+						_windowData[i]._resTime = 0;
+					}
+				}
+				_nowTime = _customerData[nextC]._arriveTime;
+				availW = _get_avail_window();
+			}
+
+			_customerData[nextC]._served = true;
+			if (_maxServeTime != 0 && _maxServeTime < _customerData[nextC]._needTime)
+			{
+				_windowData[availW]._resTime = _maxServeTime;
+			}
+			else
+				_windowData[availW]._resTime = _customerData[nextC]._needTime;
+
+			_customerData[nextC]._serveTime = _nowTime;
+			++_windowData[availW]._servedNum;
+			_windowData[availW]._servedSeq.push_back(nextC);
 		}
+	}
 
-		string nextC = _Q.front();
-
-	}*/
+	_show_results();
+	
 	return;
 }
 
@@ -300,7 +499,7 @@ void Stimulation::print_info() const
 		seconds_to_time(_closeTime).c_str());
 	if (_maxServeTime != 0)
 	{
-		printf("Each window can only serve for each customer for %d minutes.\n", _maxServeTime / 60);
+		printf("Each window can only serve for each customer for %d minutes at most.\n", _maxServeTime / 60);
 	}
 	printf("There are %d windows in the bank.\n", _windowNum);
 	if (_VIP)

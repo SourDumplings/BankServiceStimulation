@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <vector>
 
 class Stimulation;
 class Customer;
@@ -15,6 +16,7 @@ public:
 private:
 	int _resTime = 0, _servedNum = 0, _yellowLineCapacity = 0;
 	bool _isVIPWindow = false;
-	deque<string> _specialQ;
+	vector<int> _servedSeq;
+	deque<int> _specialQ;
 };
 

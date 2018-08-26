@@ -80,8 +80,3 @@ void Customer::get_serve(const string &serveTimeS_)
 	_serveTime = time_to_seconds(serveTimeS_);
 	return;
 }
-
-bool operator<(const Customer &c1, const Customer &c2)
-{
-	return c1._arriveTime < c2._arriveTime;
-}
