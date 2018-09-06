@@ -64,7 +64,7 @@ void Stimulation::_read_bank_info()
 	case 1 :
 	{
 		printf("How many VIP windows in this bank today? ");
-		read_integer(_VIPWindowNum, 0, _windowNum - 1);
+		read_integer(_VIPWindowNum, 0, _windowNum);
 		_VIP = true;
 		break;
 	}
@@ -127,9 +127,9 @@ void Stimulation::_read_customers_info()
 {
 	printf("For %d customers, please input the information of each customer: \n", _customerNum);
 	printf("***********************************************************\n");
-	printf("The format is name(no more than 10 characters), arriving time, need time(in minutes) and VIP tag\n");
-	printf("if VIP is allowed, 0 represent not VIP). They are separated by one space\n");
-	printf("For example: Tom 08:20:00 60\n");
+	printf("The format is name(no more than 10 characters), arriving time, need time(in minutes) and VIP tag");
+	printf("(if VIP is allowed, 0 represent not VIP). \nThey are separated by one space\n");
+	printf("For example: Tom 08:20:00 60 1\n");
 	printf("***********************************************************\n");
 	_customerData.resize(_customerNum);
 	for (int i = 0; i != _customerNum; ++i)
@@ -246,12 +246,167 @@ bool Stimulation::_has_VIP_in_Q()
 
 void Stimulation::_exec_VIP()
 {
+	while (true)
+	{
+		while (!_Q.empty() && _customerData[_Q.front()]._served)
+		{
+			_Q.pop_front();
+		}
+		if (_Q.empty())
+		{
+			break;
+		}
+		int availW = _get_avail_window();
+		int nextC = _Q.front();
+		if (_nowTime < _customerData[nextC]._arriveTime)
+		{
+			for (int i = 0; i != _windowNum; ++i)
+			{
+				_windowData[i]._resTime -= _customerData[nextC]._arriveTime - _nowTime;
+				if (_windowData[i]._resTime < 0)
+				{
+					_windowData[i]._resTime = 0;
+				}
+			}
+			_nowTime = _customerData[nextC]._arriveTime;
+			availW = _get_avail_window();
+		}
+		if (_closeTime < _customerData[nextC]._arriveTime)
+		{
+			break;
+		}
 
+		if (_windowData[availW]._isVIPWindow && _has_VIP_in_Q())
+		{
+			nextC = _VIPQ.front();
+			_VIPQ.pop_front();
+		}
+		else
+			_Q.pop_front();
+
+		_customerData[nextC]._served = true;
+		if (_maxServeTime != 0 && _maxServeTime < _customerData[nextC]._needTime)
+		{
+			_windowData[availW]._resTime = _maxServeTime;
+		}
+		else
+			_windowData[availW]._resTime = _customerData[nextC]._needTime;
+
+		_customerData[nextC]._serveTime = _nowTime;
+		++_windowData[availW]._servedNum;
+		_windowData[availW]._servedSeq.push_back(nextC);
+	}
+	return;
+}
+
+int Stimulation::_get_avail_non_empty_window()
+{
+	int availW = -1, minRes = INT_MAX;
+	for (int i = 0; i != _windowNum; ++i)
+	{
+		if (!_windowData[i]._specialQ.empty() && _windowData[i]._resTime < minRes)
+		{
+			availW = i;
+			minRes = _windowData[i]._resTime;
+		}
+	}
+	if (availW != -1)
+	{
+		_nowTime += minRes;
+		for (auto &w : _windowData)
+		{
+			w._resTime -= minRes;
+			if (w._resTime < 0)
+			{
+				w._resTime = 0;
+			}
+		}
+	}
+	else
+	{
+		int nextCArriveT = _customerData[_Q.front()]._arriveTime;
+		for (auto &w : _windowData)
+		{
+			w._resTime -= nextCArriveT - _nowTime;
+			if (w._resTime < 0)
+			{
+				 w._resTime = 0;
+			}
+		}
+		_nowTime = nextCArriveT;
+	}
+	return availW;
 }
 
 void Stimulation::_exec_yellowLine()
 {
+	int servedNum = 0;
+	if (_customerData[_windowData[0]._specialQ.front()]._arriveTime > _nowTime)
+	{
+		_nowTime = _customerData[_windowData[0]._specialQ.front()]._arriveTime;
+	}
+	while (servedNum < _customerNum)
+	{
+		int availW = _get_avail_window();
+		if (_windowData[availW]._specialQ.empty())
+		{
+			availW = _get_avail_non_empty_window();
+		}
+		if (availW == -1)
+		{
+			// 所有窗口的黄线以内队列全空
+			if (_Q.empty())
+			{
+				break;
+			}
+			else
+			{
+				// 此时一定是在黄线外的顾客来得很晚
+				availW = _get_avail_window();
+				_windowData[availW]._specialQ.push_back(_Q.front());
+				_Q.pop_front();
+			}
+		}
+		int nextC = _windowData[availW]._specialQ.front();
+		_windowData[availW]._specialQ.pop_front();
+		if (_closeTime < _customerData[nextC]._arriveTime)
+		{
+			break;
+		}
+		if (_nowTime < _customerData[nextC]._arriveTime)
+		{
+			for (auto &w : _windowData)
+			{
+				w._resTime -= _customerData[nextC]._arriveTime - _nowTime;
+				if (w._resTime < 0)
+				{
+					w._resTime = 0;
+				}
+			}
+			_nowTime = _customerData[nextC]._arriveTime;
+		}
 
+		_customerData[nextC]._served = true;
+		if (_maxServeTime != 0 && _maxServeTime < _customerData[nextC]._needTime)
+		{
+			_windowData[availW]._resTime = _maxServeTime;
+		}
+		else
+			_windowData[availW]._resTime = _customerData[nextC]._needTime;
+
+		_customerData[nextC]._serveTime = _nowTime;
+		++_windowData[availW]._servedNum;
+		_windowData[availW]._servedSeq.push_back(nextC);
+		++servedNum;
+
+		if (!_Q.empty() && _customerData[_Q.front()]._arriveTime < _nowTime)
+		{
+			// 如果黄线外此时有顾客已经来了，则进入黄线内
+			_windowData[availW]._specialQ.push_back(_Q.front());
+			_Q.pop_front();
+		}
+	}
+	return;
 }
 
 void Stimulation::_exec_cutIn()
@@ -327,23 +482,39 @@ void Stimulation::_serving_info_of_customers()
 {
 	printf("For all %d customers:\n", _customerNum);
 	printf("***********************************************************\n");
-	printf("The sequence of customers' serving information is as follow:");
+	printf("The sequence of customers' serving information is as follow:\n");
 	printf("Customer's name, arriving time, serving time, waiting minutes\n");
 	printf("and VIP tag(if VIP service exists) are in a line\n");
-	printf("For example: Bob 08:00:05 08:10:00 10 VIP");
-	printf("If a customer is not served, his serving time and waiting minutes will be -");
+	printf("They are sorted by serving time.\n");
+	printf("For example: Bob 08:00:05 08:10:00 10 VIP\n");
+	printf("If a customer is not served(arrived too late), his serving time and waiting minutes will be -\n");
 	printf("***********************************************************\n");
 	
 	double totalWaitTime = 0;
 	int servedNum = 0;
 
-	for (auto &c : _customerData)
+	vector<Customer*> servingSeq(_customerNum);
+	for (int i = 0; i != _customerNum; ++i)
 	{
-		cout << c._name << "	" << seconds_to_time(c._arriveTime) << "	";
-		if (c._served)
+		servingSeq[i] = &(_customerData[i]);
+	}
+	sort(servingSeq.begin(), servingSeq.end(), [](Customer * const pc1, Customer * const pc2)
+	{
+		if (pc1->_served && pc2->_served)
 		{
-			cout << seconds_to_time(c._serveTime) << "	" << (c._serveTime - c._arriveTime + 30) / 60;
-			totalWaitTime += c._serveTime - c._arriveTime;
+			return pc1->_serveTime < pc2->_serveTime;
+		}
+		else
+			return pc1->_served;
+	});
+
+	for (Customer *pc: servingSeq)
+	{
+		cout << pc->_name << "	" << seconds_to_time(pc->_arriveTime) << "	";
+		if (pc->_served)
+		{
+			cout << seconds_to_time(pc->_serveTime) << "	" << (pc->_serveTime - pc->_arriveTime + 30) / 60;
+			totalWaitTime += pc->_serveTime - pc->_arriveTime;
 			++servedNum;
 		}
 		else
@@ -351,7 +522,7 @@ void Stimulation::_serving_info_of_customers()
 
 		if (_VIP)
 		{
-			cout << "	" << (c._isVIP ? "VIP" : "not VIP") << endl;
+			cout << "	" << (pc->_isVIP ? "VIP" : "not VIP") << endl;
 		}
 		else
 		{
@@ -366,10 +537,10 @@ void Stimulation::_serving_info_of_windows()
 {
 	printf("For all %d windows:\n", _windowNum);
 	printf("***********************************************************\n");
-	printf("The sequence of windows' serving information is as follow:");
+	printf("The sequence of windows' serving information is as follow:\n");
 	printf("Window's number, VIP tag(if VIP service exists), served number, served sequence\n");
-	printf("For example: 0 VIP 3 Bob Jim Alice");
-	printf("If a windows served no one, its serving sequence will be -");
+	printf("For example: 0 VIP 3 Bob Jim Alice\n");
+	printf("If a windows served no one, its serving sequence will be -\n");
 	printf("***********************************************************\n");
 
 	for (int i = 0; i != _windowNum; ++i)
@@ -377,7 +548,7 @@ void Stimulation::_serving_info_of_windows()
 		cout << i << "	";
 		if (_VIP)
 		{
-			cout << (_windowData[i]._isVIPWindow ? "VIP" : "ordinary") << "	";
+			cout << (_windowData[i]._isVIPWindow ? "VIP" : "ORD") << "	";
 		}
 		cout << _windowData[i]._servedNum << "	";
 

@@ -36,6 +36,7 @@ private:
 	void _read_windows_info();
 
 	int _get_avail_window();
+	int _get_avail_non_empty_window();
 	bool _has_VIP_in_Q();
 	void _pre_treatment();
 	void _cut_in(int newCustomerNo);
