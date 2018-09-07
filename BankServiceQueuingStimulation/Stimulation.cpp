@@ -153,17 +153,19 @@ void Stimulation::_read_customers_info()
 	{
 		printf("Now input each customer's friends' names.\n");
 		string friendName;
+		int friendNum;
 		for (auto &c : _customerData)
 		{
-			printf("Input names of %s's friends(space separated, 0 means end).\n", c._name.c_str());
-			while (true)
+			printf("How many friends does %s have? ", c._name.c_str());
+			read_integer(friendNum, 0, _customerNum - 1);
+			if (friendNum != 0)
 			{
-				cin >> friendName;
-				if (friendName == "0")
+				printf("Input %d names of %s's friends(space separated).\n", friendNum, c._name.c_str());
+				for (int i = 0; i != friendNum; ++i)
 				{
-					break;;
+					cin >> friendName;
+					c._friends.insert(friendName);
 				}
-				c._friends.insert(friendName);
 			}
 		}
 	}
@@ -411,26 +413,94 @@ void Stimulation::_exec_yellowLine()
 
 void Stimulation::_exec_cutIn()
 {
+	while (true)
+	{
+		int availW = _get_avail_window();
+		if (_VIPQ.empty())
+		{
+			if (_Q.empty())
+			{
+				break;
+			}
 
+			// 顾客来得太晚了
+			for (auto &w : _windowData)
+			{
+				w._resTime -= _customerData[_Q.front()]._arriveTime - _nowTime;
+				if (w._resTime < 0)
+				{
+					w._resTime = 0;
+				}
+			}
+			_nowTime = _customerData[_Q.front()]._arriveTime;
+			_VIPQ.push_back(_Q.front());
+			_Q.pop_front();
+			availW = _get_avail_window();
+		}
+		while (!_Q.empty() && _customerData[_Q.front()]._arriveTime <= _nowTime)
+		{
+			_cut_in(_Q.front());
+			_Q.pop_front();
+		}
+		int nextC = _VIPQ.front();
+		if (_nowTime < _customerData[nextC]._arriveTime)
+		{
+			for (int i = 0; i != _windowNum; ++i)
+			{
+				_windowData[i]._resTime -= _customerData[nextC]._arriveTime - _nowTime;
+				if (_windowData[i]._resTime < 0)
+				{
+					_windowData[i]._resTime = 0;
+				}
+			}
+			_nowTime = _customerData[nextC]._arriveTime;
+			availW = _get_avail_window();
+			while (!_Q.empty() && _customerData[_Q.front()]._arriveTime <= _nowTime)
+			{
+				_cut_in(_Q.front());
+				_Q.pop_front();
+			}
+		}
+		_VIPQ.pop_front();
+
+		if (_closeTime < _nowTime)
+		{
+			// 银行关门前没有服务上就GG了
+			break;
+		}
+		_customerData[nextC]._served = true;
+		if (_maxServeTime != 0 && _maxServeTime < _customerData[nextC]._needTime)
+		{
+			_windowData[availW]._resTime = _maxServeTime;
+		}
+		else
+			_windowData[availW]._resTime = _customerData[nextC]._needTime;
+
+		_customerData[nextC]._serveTime = _nowTime;
+		++_windowData[availW]._servedNum;
+		_windowData[availW]._servedSeq.push_back(nextC);
+	}
+	return;
 }
 
 void Stimulation::_cut_in(int newCustomerNo)
 {
+	// 借助VIP队列记录此时已经到达银行的顾客
 	bool cutInSuccess = false;
-	for (auto it = _Q.begin(); it != _Q.end(); ++it)
+	for (auto it = _VIPQ.begin(); it != _VIPQ.end(); ++it)
 	{
 		const string &newCustomerName = _customerData[newCustomerNo]._name, &friendName = _customerData[*it]._name;
 		if (_customerData[newCustomerNo]._friends.find(friendName) != _customerData[newCustomerNo]._friends.end() &&
 			_customerData[*it]._friends.find(newCustomerName) != _customerData[*it]._friends.end())
 		{
-			_Q.insert(it + 1, newCustomerNo);
+			_VIPQ.insert(it + 1, newCustomerNo);
 			cutInSuccess = true;
 			break;
 		}
 	}
 	if (!cutInSuccess)
 	{
-		_Q.push_back(newCustomerNo);
+		_VIPQ.push_back(newCustomerNo);
 	}
 	return;
 }
@@ -461,7 +531,7 @@ void Stimulation::_pre_treatment()
 				_Q.push_back(i);
 			}
 		}
-		else if (_cutIn)
+		else if (_cutIn && _customerData[i]._arriveTime <= _nowTime)
 		{
 			_cut_in(i);
 		}
